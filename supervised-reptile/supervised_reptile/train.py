@@ -27,7 +27,7 @@ def train(sess,
           meta_iters=400000,
           eval_inner_batch_size=5,
           eval_inner_iters=50,
-          eval_interval=10,
+          eval_interval=100,
           weight_decay_rate=1,
           time_deadline=None,
           train_shots=None,
@@ -70,10 +70,9 @@ def train(sess,
                 writer.add_summary(summary, i)
                 writer.flush()
                 accuracies.append(correct / num_classes)
-            log_fn('batch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]))
-        import pdb
-        pdb.set_trace()
-        if i % 100 == 0 or i == meta_iters-1:
+            log_fn('\rbatch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]), end='')
+        if i % eval_interval == 0 or i == meta_iters-1:
             saver.save(sess, os.path.join(save_dir, 'model.ckpt'), global_step=i)
         if time_deadline is not None and time.time() > time_deadline:
             break
+    log_fn()

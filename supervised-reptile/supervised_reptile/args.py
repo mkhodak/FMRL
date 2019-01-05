@@ -33,7 +33,7 @@ def argument_parser():
     parser.add_argument('--eval-batch', help='eval inner batch size', default=5, type=int)
     parser.add_argument('--eval-iters', help='eval inner iterations', default=50, type=int)
     parser.add_argument('--eval-samples', help='evaluation samples', default=10000, type=int)
-    parser.add_argument('--eval-interval', help='train steps per eval', default=10, type=int)
+    parser.add_argument('--eval-interval', help='train steps per eval', default=100, type=int)
     parser.add_argument('--weight-decay', help='weight decay rate', default=1, type=float)
     parser.add_argument('--transductive', help='evaluate all samples at once', action='store_true')
     parser.add_argument('--foml', help='use FOML instead of Reptile', action='store_true')
