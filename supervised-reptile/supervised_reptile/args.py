@@ -40,7 +40,7 @@ def argument_parser():
     parser.add_argument('--foml-tail', help='number of shots for the final mini-batch in FOML',
                         default=None, type=int)
     parser.add_argument('--sgd', help='use vanilla SGD instead of Adam', action='store_true')
-    parser.add_argument('--ftrl', help='use FTRL', action='store_true')
+    parser.add_argument('--ftrl', help='regularization coefficient', default=0.0, type=float)
     return parser
 
 def model_kwargs(parsed_args):
