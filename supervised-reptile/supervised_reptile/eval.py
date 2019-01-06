@@ -26,7 +26,7 @@ def evaluate(sess,
                          pre_step_op=weight_decay(weight_decay_rate))
     total_correct = 0
     for _ in range(num_samples):
-        total_correct += reptile.evaluate(dataset, model.input_ph, model.label_ph,
+        total_correct += reptile.evaluate(dataset, model.input_ph, model.label_ph, model.reg_ph,
                                           model.minimize_op, model.predictions,
                                           num_classes=num_classes, num_shots=num_shots,
                                           inner_batch_size=eval_inner_batch_size,

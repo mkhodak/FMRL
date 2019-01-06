@@ -14,7 +14,7 @@ class OmniglotModel:
     """
     A model for Omniglot classification.
     """
-    def __init__(self, num_classes, optimizer=DEFAULT_OPTIMIZER, **optim_kwargs):
+    def __init__(self, num_classes, optimizer=DEFAULT_OPTIMIZER, ftrl=False, **optim_kwargs):
         self.input_ph = tf.placeholder(tf.float32, shape=(None, 28, 28))
         out = tf.reshape(self.input_ph, (-1, 28, 28, 1))
         for _ in range(4):
@@ -26,6 +26,12 @@ class OmniglotModel:
         self.label_ph = tf.placeholder(tf.int32, shape=(None,))
         self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label_ph,
                                                                    logits=self.logits)
+        if ftrl:
+            self.reg_ph = [tf.placeholder(tf.float32, shape=var.shape) for var in tf.trainable_variables()]
+            for var, reg in zip(tf.trainable_variables(), self.reg_ph):
+                self.loss += tf.losses.mean_squared_error(reg, var)
+        else:
+            self.reg_ph = []
         self.predictions = tf.argmax(self.logits, axis=-1)
         self.minimize_op = optimizer(**optim_kwargs).minimize(self.loss)
 
@@ -34,7 +40,7 @@ class MiniImageNetModel:
     """
     A model for Mini-ImageNet classification.
     """
-    def __init__(self, num_classes, optimizer=DEFAULT_OPTIMIZER, **optim_kwargs):
+    def __init__(self, num_classes, optimizer=DEFAULT_OPTIMIZER, ftrl=False, **optim_kwargs):
         self.input_ph = tf.placeholder(tf.float32, shape=(None, 84, 84, 3))
         out = self.input_ph
         for _ in range(4):
@@ -47,5 +53,11 @@ class MiniImageNetModel:
         self.label_ph = tf.placeholder(tf.int32, shape=(None,))
         self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.label_ph,
                                                                    logits=self.logits)
+        if ftrl:
+            self.reg_ph = [tf.placeholder(tf.float32, shape=var.shape) for var in tf.trainable_variables()]
+            for var, reg in zip(tf.trainable_variables(), self.reg_ph):
+                self.loss += tf.losses.mean_squared_error(reg, var)
+        else:
+            self.reg_ph = []
         self.predictions = tf.argmax(self.logits, axis=-1)
         self.minimize_op = optimizer(**optim_kwargs).minimize(self.loss)

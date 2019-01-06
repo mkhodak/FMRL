@@ -32,6 +32,7 @@ class Reptile:
                    dataset,
                    input_ph,
                    label_ph,
+                   reg_ph,
                    minimize_op,
                    num_classes,
                    num_shots,
@@ -60,6 +61,8 @@ class Reptile:
           meta_batch_size: how many inner-loops to run.
         """
         old_vars = self._model_state.export_variables()
+        if reg_ph:
+            reg_feed_dict = dict(zip(reg_ph, old_vars))
         new_vars = []
         for _ in range(meta_batch_size):
             mini_dataset = _sample_mini_dataset(dataset, num_classes, num_shots)
@@ -67,7 +70,10 @@ class Reptile:
                 inputs, labels = zip(*batch)
                 if self._pre_step_op:
                     self.session.run(self._pre_step_op)
-                self.session.run(minimize_op, feed_dict={input_ph: inputs, label_ph: labels})
+                feed_dict = {input_ph: inputs, label_ph: labels}
+                if reg_ph:
+                    feed_dict.update(reg_feed_dict)
+                self.session.run(minimize_op, feed_dict=feed_dict)
             new_vars.append(self._model_state.export_variables())
             self._model_state.import_variables(old_vars)
         new_vars = average_vars(new_vars)
@@ -77,6 +83,7 @@ class Reptile:
                  dataset,
                  input_ph,
                  label_ph,
+                 reg_ph,
                  minimize_op,
                  predictions,
                  num_classes,
@@ -112,11 +119,16 @@ class Reptile:
         train_set, test_set = _split_train_test(
             _sample_mini_dataset(dataset, num_classes, num_shots+1))
         old_vars = self._full_state.export_variables()
+        if reg_ph:
+            reg_feed_dict = dict(zip(reg_ph, self._model_state.export_variables()))
         for batch in _mini_batches(train_set, inner_batch_size, inner_iters, replacement):
             inputs, labels = zip(*batch)
             if self._pre_step_op:
                 self.session.run(self._pre_step_op)
-            self.session.run(minimize_op, feed_dict={input_ph: inputs, label_ph: labels})
+            feed_dict = {input_ph: inputs, label_ph: labels}
+            if reg_ph:
+                feed_dict.update(reg_feed_dict)
+            self.session.run(minimize_op, feed_dict=feed_dict)
         test_preds = self._test_predictions(train_set, test_set, input_ph, predictions)
         num_correct = sum([pred == sample[1] for pred, sample in zip(test_preds, test_set)])
         self._full_state.import_variables(old_vars)
