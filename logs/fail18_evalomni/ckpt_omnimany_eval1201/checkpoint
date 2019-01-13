@@ -1,0 +1,6 @@
+model_checkpoint_path: "model.ckpt-7600"
+all_model_checkpoint_paths: "model.ckpt-7200"
+all_model_checkpoint_paths: "model.ckpt-7300"
+all_model_checkpoint_paths: "model.ckpt-7400"
+all_model_checkpoint_paths: "model.ckpt-7500"
+all_model_checkpoint_paths: "model.ckpt-7600"
