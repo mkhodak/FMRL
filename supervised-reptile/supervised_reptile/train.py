@@ -66,9 +66,9 @@ def train(sess,
                                            num_classes=num_classes, num_shots=num_shots,
                                            inner_batch_size=eval_inner_batch_size,
                                            inner_iters=eval_inner_iters, replacement=replacement)
-                summary = sess.run(merged, feed_dict={accuracy_ph: correct/num_classes})
-                writer.add_summary(summary, i)
-                writer.flush()
+                #summary = sess.run(merged, feed_dict={accuracy_ph: correct/num_classes})
+                #writer.add_summary(summary, i)
+                #writer.flush()
                 accuracies.append(correct / num_classes)
             log_fn('\rbatch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]), end='')
         if i % eval_interval == 0 or i == meta_iters-1:
