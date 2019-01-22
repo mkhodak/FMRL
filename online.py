@@ -278,7 +278,6 @@ def main():
         print('\rProcessed', i+1, 'Tasks ; TAR:', round(np.mean(regret), 5))
         f.create_dataset(str(m), data=np.array(regret))
     f.close()
-    pdb.set_trace()
 
 
 if __name__ == '__main__':
