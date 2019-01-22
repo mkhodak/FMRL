@@ -1,4 +1,5 @@
 import pdb
+import sys
 from math import sqrt
 import cvxpy as cp
 import h5py
@@ -72,7 +73,7 @@ class Baseline(CLogit):
             return loss
         return closure
 
-    def ftrl(self, X, Y, store=False):
+    def ftrl(self, X, Y, store=False, batch=False):
 
         params = next(self.model.parameters())
         m = X.shape[0]
@@ -82,6 +83,8 @@ class Baseline(CLogit):
         blogit = BiasRegularizedLogit(radius=self.radius, eta=eta, phi=phi.detach().numpy())
         Xarray, Yarray = X.detach().numpy(), Y.detach().numpy()
         for i in range(1, m+1):
+            if batch and i < m and not store:
+                continue
             if store:
                 if i == 1:
                     avg = params.data.clone()
@@ -100,7 +103,7 @@ class Baseline(CLogit):
             params.data = avg / m
         return losses
 
-    def ogd(self, X, Y, store=False):
+    def ogd(self, X, Y, store=False, **kwargs):
 
         params = next(self.model.parameters())
         m = X.shape[0]
@@ -188,33 +191,35 @@ class FML(Strawman):
         if self.t > 1:
             params.data = prev - 1.0/self.sqrtm1t * (prev-params.data)
 
-    def meta(self, X, Y, method='ftrl'):
+    def meta(self, X, Y, method='ftrl', batch=False):
 
         Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        self.t += 1
         params = next(self.model.parameters())
         prev = params.data.clone()
         self.fit(X, Y)
         opt = torch.Tensor(self.coef_)
-        if self.t > 1 and torch.norm(prev - opt) > self.D:
+        if self.t and torch.norm(prev - opt) > self.D:
             self.D *= self.gamma
-        losses = getattr(self, method)(Xtensor, Ytensor)
+        if not batch:
+            losses = getattr(self, method)(Xtensor, Ytensor, batch=batch)
         params.data = opt
         comp = float(self.loss(self.model(Xtensor), Ytensor))
         self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
         self.t += 1
+        if batch:
+            return None
         return losses.sum() - comp
 
 
 class FLI(FML):
 
-    def meta(self, X, Y, method='ftrl', avg=False):
+    def meta(self, X, Y, method='ftrl', avg=False, **kwargs):
 
         Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
         params = next(self.model.parameters())
         prev = params.data.clone()
         self.fit(X, Y)
-        losses = getattr(self, method)(Xtensor, Ytensor, store=avg)
+        losses = getattr(self, method)(Xtensor, Ytensor, store=avg, **kwargs)
         update = params.data.clone()
         if self.t and torch.norm(prev - update) > self.D:
             self.D *= self.gamma
@@ -229,38 +234,49 @@ class FLI(FML):
 
 def main():
 
-    ncls, dim, shots, verbose = 4, 50, 1, True
+    ncls, dim, verbose = 4, 50, True
     w2v = word2vec(dim)
-    fnames = textfiles(m=shots)
     model = MultiClassLinear(dim, ncls)
     params = next(model.parameters())
     loss = OVAL(ncls, reduction='sum')
 
-    f = h5py.File('FMRL/cbow_similarity.h5')
-    opt = np.array(f[str(shots)])
-    mean = opt.mean(0)
-    radius = max(norm(w-mean) for w in opt)
-    for name, algo in [
-                       ('baseline', Baseline(model, loss)),
-                       ('strawman', Strawman(model, loss)),
-                       ('omniscient', Baseline(model, loss)),
-                       ('FML', FML(model, loss)),
-                       ('FLI', FLI(model, loss))
-                       ]:
-        if name == 'omniscient':
+    meta, task = sys.argv[1:]
+    kwargs = {'method': task}
+    if meta in {'baseline', 'omniscient'}:
+        algo = Baseline(model, loss)
+    elif meta == 'strawman':
+        algo = Strawman(model, loss)
+    elif meta == 'fml':
+        algo = FML(model, loss)
+    elif meta == 'fli':
+        algo = FLI(model, loss)
+        kwargs['avg'] = False
+    else:
+        raise(NotImplementedError)
+
+    f = h5py.File('FMRL/'+task+'-'+meta+'-online.h5')
+    for k in range(0, 6):
+        m = 2**k
+        print('\rComputing Regret of', m, 'Shot Classification')
+        fnames = textfiles(m=m)
+        if meta == 'omniscient':
+            g = h5py.File('FMRL/cbow_similarity.h5')
+            opt = np.array(g[str(m)])
+            g.close()
+            mean = opt.mean(0)
             params.data = torch.Tensor(mean.reshape(ncls, dim))
-            algo.D = radius
+            algo.D = max(norm(theta-mean) for theta in opt)
         else:
             params.data *= 0.0
         regret = []
-        print(name)
-        for i, fname in enumerate(fnames):
+        for i, fname in enumerate(textfiles(m=m)):
             X, Y = text2cbow(fname, w2v)
-            regret.append(algo.meta(X, Y, method='ftrl'))
+            regret.append(algo.meta(X, Y, **kwargs))
             if verbose and not (i+1) % 10:
                 print('\rProcessed', i+1, 'Tasks', end='')
                 print(' ; TAR:', round(np.mean(regret), 5), end='')
         print('\rProcessed', i+1, 'Tasks ; TAR:', round(np.mean(regret), 5))
+        f.create_dataset(str(m), data=np.array(regret))
     f.close()
     pdb.set_trace()
 
