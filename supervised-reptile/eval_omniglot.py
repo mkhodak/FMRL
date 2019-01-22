@@ -28,7 +28,7 @@ def main():
     model = OmniglotModel(args.classes, **model_kwargs(args))
 
     with tf.Session() as sess:
-        for i in range(5):
+        for i in range(25):
 
             if not args.pretrained:
                 print('Training...')
