@@ -56,6 +56,7 @@ class Baseline(CLogit):
         self.D = radius
         self.params = next(self.model.parameters())
         self.phi = self.params.data.clone()
+        self.last = True
         super().__init__(radius=radius, **kwargs)
 
     def get_closure(self, X, Y, eta, phi):
@@ -81,7 +82,11 @@ class Baseline(CLogit):
         losses = np.empty(m)
         blogit = BiasRegularizedLogit(radius=self.radius, eta=eta, phi=self.phi.detach().numpy())
         Xarray, Yarray = X.detach().numpy(), Y.detach().numpy()
+        if not self.last:
+            avg = torch.zeros(params.shape)
         for i in range(1, m+1):
+            if not self.last:
+                avg += params.data
             losses[i-1] = float(self.loss(self.model(X[i-1:i]), Y[i-1:i]))
             try:
                 blogit.fit(Xarray[:i], Yarray[:i], ncls=4)
@@ -89,6 +94,8 @@ class Baseline(CLogit):
             except cp.error.SolverError:
                 closure = self.get_closure(X[:i], Y[:i], eta, self.phi)
                 frank_wolfe(closure, params, radius=self.radius)
+        if not self.last:
+            self.params.data = avg / m
         return losses
 
     def ogd(self, X, Y):
@@ -98,7 +105,11 @@ class Baseline(CLogit):
         m = X.shape[0]
         eta = self.D / sqrt(m)
         losses = np.empty(m)
+        if not self.last:
+            avg = torch.zeros(params.shape)
         for i in range(1, m+1):
+            if not self.last:
+                avg += params.data
             loss = self.loss(self.model(X[i-1:i]), Y[i-1:i])
             self.model.zero_grad()
             loss.backward()
@@ -107,6 +118,8 @@ class Baseline(CLogit):
             if magnitude > self.radius:
                 params.data *= self.radius / magnitude
             losses[i-1] = float(loss)
+        if not self.last:
+            self.params.data = avg / m
         return losses
 
     def meta(self, X, Y, method='ogd'):
@@ -187,16 +200,19 @@ def main():
     model = MultiClassLinear(dim, ncls)
     params = next(model.parameters())
     loss = OVAL(ncls, reduction='sum')
-    meta, task = sys.argv[1:]
+    meta, task = sys.argv[1:3]
     algos = {'baseline': Baseline, 'omniscient': Baseline, 'strawman': Strawman, 'fml': FML, 'fli': FLI}
+    iterate = '-'+sys.argv[3] if meta == 'fli' else ''
+    last = not iterate == '-avg'
 
-    f = h5py.File('FMRL/'+meta+'-'+task+'-online.h5', 'w')
+    f = h5py.File('FMRL/'+meta+iterate+'-'+task+'-online.h5', 'w')
     for k in range(0, 6):
         m = 2**k
         print('\rComputing Regret of', m, 'Shot Classification')
         fnames = textfiles(m=m)
         params.data *= 0.0
         algo = algos[sys.argv[1]](model, loss)
+        algo.last = last
         if meta == 'omniscient':
             g = h5py.File('FMRL/cbow_similarity.h5')
             opt = np.array(g[str(m)])
