@@ -98,7 +98,7 @@ def main():
     loss = OVAL(ncls, reduction='sum')
     random.seed(0)
     #options = [4**-i for i in range(6)]
-    options = [1E-4, 1E-3, 1E-2, 1E-1, 1E0]
+    options = [1E-3, 1E-2, 1E-3, 1E0]
     
     
     meta = sys.argv[1]
@@ -129,6 +129,7 @@ def main():
         best, bestacc = None, 0.0
         for etas in sweep:
             algo = cls(model, loss, **etas)
+            algo.learner.batch = True
             for i, fname in enumerate(fnames):
                 X, Y = text2cbow(fname, w2v)
                 algo.meta(X, Y, **kwargs)
@@ -136,6 +137,7 @@ def main():
                     print('\rTrained on', i+1, 'Tasks', end='')
             clf = Logit(fit_intercept=False, n_jobs=-1)
             clf.fit(X, Y)
+            if len(sweep) == 1: break
             acc = []
             for i, (train, test) in enumerate(zip(textfiles(partition='dev', m=m), textfiles(partition='dev', m='test'))):
                 X, Y = text2cbow(train, w2v)
@@ -148,8 +150,9 @@ def main():
             if np.mean(acc) > bestacc:
                 best = deepcopy(algo), params.data.clone()
                 bestacc = np.mean(acc)
-        algo = best[0]
-        params.data = best[1]
+        if len(sweep) > 1:
+            algo = best[0]
+            params.data = best[1]
         acc = []
         for i, (train, test) in enumerate(zip(textfiles(partition='test', m=m), textfiles(partition='test', m='test'))):
             X, Y = text2cbow(train, w2v)
