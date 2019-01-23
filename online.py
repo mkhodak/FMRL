@@ -55,7 +55,7 @@ class Baseline(CLogit):
         self.model = model
         self.loss = loss
         self.radius = radius
-        self.D = 2.0 * radius
+        self.D = radius
         self.t = 0
         super().__init__(radius=radius, **kwargs)
 
@@ -166,70 +166,90 @@ class Strawman(Baseline):
 
 class FML(Strawman):
 
-    def __init__(self, model, loss, aogd=False, **kwargs):
-
-        super().__init__(model, loss, **kwargs)
-        self.aogd = aogd
-        self.sqrtm1t = 0
-
-    def ftl_update(self, prev, m):
-
-        params = next(self.model.parameters())
-        sqrtm = sqrt(m)
-        if self.t > 1:
-            params.data *= sqrtm
-            params.data += self.sqrtm1t * prev
-            self.sqrtm1t += sqrtm
-            params.data /= self.sqrtm1t
-        else:
-            self.sqrtm1t += sqrtm
-
-    def aogd_update(self, prev, m):
-
-        params = next(self.model.parameters())
-        self.sqrtm1t += sqrt(m)
-        if self.t > 1:
-            params.data = prev - 1.0/self.sqrtm1t * (prev-params.data)
-
-    def meta(self, X, Y, method='ftrl', batch=False):
+    def meta(self, X, Y, method='ftrl'):
 
         Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
+        self.t += 1
         params = next(self.model.parameters())
         prev = params.data.clone()
         self.fit(X, Y)
         opt = torch.Tensor(self.coef_)
-        if self.t and torch.norm(prev - opt) > self.D:
+        if self.t > 1 and torch.norm(params-opt) > self.D:
             self.D *= self.gamma
-        if not batch:
-            losses = getattr(self, method)(Xtensor, Ytensor, batch=batch)
+        losses = getattr(self, method)(Xtensor, Ytensor)
         params.data = opt
         comp = float(self.loss(self.model(Xtensor), Ytensor))
-        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
-        self.t += 1
-        if batch:
-            return None
+        if self.t > 1:
+            params.data = (1-1/self.t)*prev + 1/self.t*opt
         return losses.sum() - comp
 
 
-class FLI(FML):
-
-    def meta(self, X, Y, method='ftrl', avg=False, **kwargs):
-
-        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        params = next(self.model.parameters())
-        prev = params.data.clone()
-        self.fit(X, Y)
-        losses = getattr(self, method)(Xtensor, Ytensor, store=avg, **kwargs)
-        update = params.data.clone()
-        if self.t and torch.norm(prev - update) > self.D:
-            self.D *= self.gamma
-        opt = torch.Tensor(self.coef_)
-        params.data = opt
-        comp = float(self.loss(self.model(Xtensor), Ytensor))
-        params.data = update
-        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
-        self.t += 1
-        return losses.sum() - comp
+#class FML(Strawman):
+#
+#    def __init__(self, model, loss, aogd=True, **kwargs):
+#
+#        super().__init__(model, loss, **kwargs)
+#        self.aogd = aogd
+#        self.sqrtm1t = 0
+#
+#    def ftl_update(self, prev, m):
+#
+#        params = next(self.model.parameters())
+#        sqrtm = sqrt(m)
+#        if self.t > 1:
+#            params.data *= sqrtm
+#            params.data += self.sqrtm1t * prev
+#            self.sqrtm1t += sqrtm
+#            params.data /= self.sqrtm1t
+#        else:
+#            self.sqrtm1t += sqrtm
+#
+#    def aogd_update(self, prev, m):
+#
+#        params = next(self.model.parameters())
+#        self.sqrtm1t += sqrt(m)
+#        if self.t > 1:
+#            params.data = prev - 1.0/self.sqrtm1t * (prev-params.data)
+#
+#    def meta(self, X, Y, method='ftrl', batch=False):
+#
+#        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
+#        params = next(self.model.parameters())
+#        prev = params.data.clone()
+#        self.fit(X, Y)
+#        opt = torch.Tensor(self.coef_)
+#        if self.t > 1 and torch.norm(prev-opt) > self.D:
+#            self.D *= self.gamma
+#        if not batch:
+#            losses = getattr(self, method)(Xtensor, Ytensor, batch=batch)
+#        params.data = opt
+#        comp = float(self.loss(self.model(Xtensor), Ytensor))
+#        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
+#        self.t += 1
+#        if batch:
+#            return None
+#        return losses.sum() - comp
+#
+#
+#class FLI(FML):
+#
+#    def meta(self, X, Y, method='ftrl', avg=False, **kwargs):
+#
+#        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
+#        params = next(self.model.parameters())
+#        prev = params.data.clone()
+#        self.fit(X, Y)
+#        losses = getattr(self, method)(Xtensor, Ytensor, store=avg, **kwargs)
+#        update = params.data.clone()
+#        if self.t and torch.norm(prev - update) > self.D:
+#            self.D *= self.gamma
+#        opt = torch.Tensor(self.coef_)
+#        params.data = opt
+#        comp = float(self.loss(self.model(Xtensor), Ytensor))
+#        params.data = update
+#        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
+#        self.t += 1
+#        return losses.sum() - comp
 
 
 def main():
@@ -254,7 +274,7 @@ def main():
     else:
         raise(NotImplementedError)
 
-    f = h5py.File('FMRL/'+task+'-'+meta+'-online.h5')
+    #f = h5py.File('FMRL/'+task+'-'+meta+'-online.h5')
     for k in range(0, 6):
         m = 2**k
         print('\rComputing Regret of', m, 'Shot Classification')
@@ -268,16 +288,18 @@ def main():
             algo.D = max(norm(theta-mean) for theta in opt)
         else:
             params.data *= 0.0
-        regret = []
+        regret, guesses = [0.0], [algo.D]
         for i, fname in enumerate(textfiles(m=m)):
             X, Y = text2cbow(fname, w2v)
             regret.append(algo.meta(X, Y, **kwargs))
+            guesses.append(algo.D)
             if verbose and not (i+1) % 10:
                 print('\rProcessed', i+1, 'Tasks', end='')
                 print(' ; TAR:', round(np.mean(regret), 5), end='')
         print('\rProcessed', i+1, 'Tasks ; TAR:', round(np.mean(regret), 5))
-        f.create_dataset(str(m), data=np.array(regret))
-    f.close()
+        #f.create_dataset(str(m)+'-regret', data=np.array(regret))
+        #f.create_dataset(str(m)+'-Dhat', data=np.array(guesses))
+    #f.close()
 
 
 if __name__ == '__main__':
