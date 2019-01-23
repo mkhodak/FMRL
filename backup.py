@@ -145,6 +145,10 @@ class Strawman(Baseline):
 
 class FML(Strawman):
 
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
     def meta(self, X, Y, method='ogd'):
 
         self.t += 1
@@ -161,25 +165,6 @@ class FML(Strawman):
         return regret
 
 
-class FLI(Strawman):
-
-    def meta(self, X, Y, method='ogd'):
-
-        self.t += 1
-        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        losses = getattr(self, method)(Xtensor, Ytensor)
-        last = self.params.data.clone()
-        self.fit(X, Y)
-        opt = torch.Tensor(self.coef_)
-        self.params.data = opt
-        regret = losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
-        opt = torch.Tensor(self.coef_)
-        if self.t > 1 and torch.norm(opt-self.phi) > self.D:
-            self.D *= self.gamma
-        self.phi = (1-1/self.t)*self.phi + 1/self.t*last
-        return regret
-
-
 def main():
 
     ncls, dim, verbose = 4, 50, True
@@ -187,35 +172,22 @@ def main():
     model = MultiClassLinear(dim, ncls)
     params = next(model.parameters())
     loss = OVAL(ncls, reduction='sum')
-    meta, task = sys.argv[1:]
-    algos = {'baseline': Baseline, 'omniscient': Baseline, 'strawman': Strawman, 'fml': FML, 'fli': FLI}
 
-    f = h5py.File('FMRL/'+meta+'-'+task+'-online.h5', 'w')
     for k in range(0, 6):
         m = 2**k
         print('\rComputing Regret of', m, 'Shot Classification')
-        fnames = textfiles(m=m)
         params.data *= 0.0
-        algo = algos[sys.argv[1]](model, loss)
-        if meta == 'omniscient':
-            g = h5py.File('FMRL/cbow_similarity.h5')
-            opt = np.array(g[str(m)])
-            g.close()
-            mean = opt.mean(0)
-            algo.phi = torch.Tensor(mean.reshape(ncls, dim))
-            algo.D = max(norm(theta-mean) for theta in opt)
+        algo = FML(model, loss)
         regret = []
-        guesses = []
-        for i, fname in enumerate(fnames):
-            guesses.append(algo.D)
+        for i, fname in enumerate(textfiles(m=m)[:100]):
             X, Y = text2cbow(fname, w2v)
-            regret.append(algo.meta(X, Y, method=task))
+            regret.append(algo.meta(X, Y, method='ftrl'))
             if verbose:
                 print('\rProcessed', i+1, 'Tasks', end='')
                 print('; TAR:', round(np.mean(regret), 5), end='')
         print()
-        f.create_dataset(str(m), data=np.array([regret, guesses]))
-    f.close()
+        pdb.set_trace()
+
 
 if __name__ == '__main__':
 
