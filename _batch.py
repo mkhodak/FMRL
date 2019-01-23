@@ -7,7 +7,6 @@ import h5py
 import numpy as np
 import torch
 from sklearn.linear_model import LogisticRegression as Logit
-sys.path.append('/home/ubuntu/')
 from FMRL.data import word2vec
 from FMRL.data import textfiles
 from FMRL.data import text2cbow
@@ -29,12 +28,12 @@ class FMRL:
             raise(NotImplementedError)
         self.meta = self.learner.meta
 
-    def train(self, X, Y, method='ftrl'):#, avg=True, **kwargs):
+    def train(self, X, Y, method='ftrl', avg=True, **kwargs):
 
         Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        params = self.learner.params
+        params = next(self.learner.model.parameters())
         fixed = params.data.clone()
-        getattr(self.learner, method)(Xtensor, Ytensor)#, store=avg, **kwargs)
+        getattr(self.learner, method)(Xtensor, Ytensor, store=avg, **kwargs)
         out = params.detach().numpy()
         params.data = fixed
         return out
@@ -97,8 +96,8 @@ def main():
     params.data *= 0.0
     loss = OVAL(ncls, reduction='sum')
     random.seed(0)
-    #options = [4**-i for i in range(6)]
-    options = [1E-4, 1E-3, 1E-2, 1E-1, 1E0]
+    options = [4**-i for i in range(6)]
+    options = [1E-3, 1E-2, 1E-1, 1E0]
     
     
     meta = sys.argv[1]
@@ -106,21 +105,21 @@ def main():
         sweep = [{'eta_meta': eta_meta, 'eta_task': eta_task} for eta_meta, eta_task in combinations(options, 2)]
         cls = MAML
         kwargs = {}
-        #trargs = kwargs
+        trargs = kwargs
     else:
         sweep = [{'variant': meta, 'D': D, 'gamma': gammam1+1.0} for D, gammam1 in combinations(options, 2)]
         cls = FMRL
         task = sys.argv[2]
         kwargs = {'method': task}
-        #if task == 'ftrl':
-        #    kwargs['batch'] = True
-        #try:
-        #    trargs = {'avg': not sys.argv[3] == 'last'}
-        #    trargs.update(kwargs)
-        #except IndexError:
-        #    trargs = kwargs
+        if task == 'ftrl':
+            kwargs['batch'] = True
+        try:
+            trargs = {'avg': not sys.argv[3] == 'last'}
+            trargs.update(kwargs)
+        except IndexError:
+            trargs = kwargs
 
-#    f = h5py.File('FMRL/'+'-'.join(sys.argv[1:])+'-batch.h5')
+    f = h5py.File('FMRL/'+'-'.join(sys.argv[1:])+'-batch.h5')
     for k in range(0, 6):
         m = 2**k
         print('\rTraining', m, 'Shot Classification')
@@ -139,7 +138,7 @@ def main():
             acc = []
             for i, (train, test) in enumerate(zip(textfiles(partition='dev', m=m), textfiles(partition='dev', m='test'))):
                 X, Y = text2cbow(train, w2v)
-                clf.coef_ = algo.train(X, Y, **kwargs)#trargs)
+                clf.coef_ = algo.train(X, Y, **trargs)
                 X, Y = text2cbow(test, w2v)
                 acc.append(clf.score(X, Y))
                 if verbose and not (i+1) % 10:
@@ -153,15 +152,15 @@ def main():
         acc = []
         for i, (train, test) in enumerate(zip(textfiles(partition='test', m=m), textfiles(partition='test', m='test'))):
             X, Y = text2cbow(train, w2v)
-            clf.coef_ = algo.train(X, Y, **kwargs)#trargs)
+            clf.coef_ = algo.train(X, Y, **trargs)
             X, Y = text2cbow(test, w2v)
             acc.append(clf.score(X, Y))
             if verbose and not (i+1) % 10:
                 print('\rEvaluated on', i+1, 'Tasks', end='')
                 print(' ; Acc:', np.round(np.mean(acc), 5), end='')
         print('\rEvaluated on', i+1, 'Tasks ; Acc:', np.round(np.mean(acc), 5))
-        #f.create_dataset(str(m), data=np.array(acc))
-    #f.close()
+        f.create_dataset(str(m), data=np.array(acc))
+    f.close()
 
 
 if __name__ == '__main__':
