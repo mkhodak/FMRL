@@ -57,6 +57,7 @@ class Baseline(CLogit):
         self.params = next(self.model.parameters())
         self.phi = self.params.data.clone()
         self.last = True
+        self.batch = False
         super().__init__(radius=radius, **kwargs)
 
     def get_closure(self, X, Y, eta, phi):
@@ -85,6 +86,8 @@ class Baseline(CLogit):
         if not self.last:
             avg = torch.zeros(params.shape)
         for i in range(1, m+1):
+            if i < m and self.batch:
+                continue
             if not self.last:
                 avg += params.data
             losses[i-1] = float(self.loss(self.model(X[i-1:i]), Y[i-1:i]))
