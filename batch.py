@@ -97,7 +97,7 @@ def main():
     loss = OVAL(ncls, reduction='sum')
     random.seed(0)
     options = [4**-i for i in range(6)]
-    options = [1E-3, 1E-2, 1E-1, 1E0]
+    #options = [1E-3, 1E-2, 1E-1, 1E0]
     
     
     meta = sys.argv[1]
