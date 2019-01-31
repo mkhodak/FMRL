@@ -9,3 +9,5 @@ for COEF in 0.01 0.1 1.0 10.0 100.0 ; do
     python sweep_omniglot.py --shots 1 --classes 20 --inner-batch 20 --inner-iters 10 --meta-step 1 --meta-batch 5 --meta-iters 50000 --eval-batch 10 --eval-iters 50 --learning-rate 0.0005 --meta-step-final 0 --train-shots 10 --checkpoint ckpt$COEF'_o120sweep' $OPTIONS $COEF 2>&1 | tee reg$COEF'_o120sweep.log' 
 
     python sweep_omniglot.py --classes 20 --inner-batch 20 --inner-iters 10 --meta-step 1 --meta-batch 5 --meta-iters 50000 --eval-batch 10 --eval-iters 50 --learning-rate 0.0005 --meta-step-final 0 --train-shots 10 --checkpoint ckpt$COEF'_o520sweep' $OPTIONS $COEF 2>&1 | tee reg$COEF'_o520sweep.log'
+
+done
