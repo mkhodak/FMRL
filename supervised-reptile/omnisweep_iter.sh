@@ -9,3 +9,5 @@ for ITER in 5 10 25 50 ; do
     python sweep_omniglot.py --shots 1 --classes 20 --inner-batch 20 --inner-iters $ITER --meta-step 1 --meta-batch 5 --meta-iters 50000 --eval-batch 10 --eval-iters 50 --learning-rate 0.0005 --meta-step-final 0 --train-shots 10 --checkpoint ckpt$ITER'_o120sweep' $OPTIONS 2>&1 | tee iter$ITER'_o120sweep.log' 
 
     python sweep_omniglot.py --classes 20 --inner-batch 20 --inner-iters $ITER --meta-step 1 --meta-batch 5 --meta-iters 50000 --eval-batch 10 --eval-iters 50 --learning-rate 0.0005 --meta-step-final 0 --train-shots 10 --checkpoint ckpt$ITER'_o520sweep' $OPTIONS 2>&1 | tee iter$ITER'_o520sweep.log'
+
+done
