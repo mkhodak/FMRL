@@ -1,4 +1,5 @@
 import pdb
+import sys
 from math import sqrt
 import cvxpy as cp
 import h5py
@@ -6,7 +7,6 @@ import numpy as np
 import torch
 from numpy.linalg import norm
 from sklearn.linear_model import LogisticRegression as Logit
-import sys
 sys.path.append('/home/ubuntu')
 from FMRL.data import word2vec
 from FMRL.data import textfiles
@@ -47,21 +47,23 @@ class BiasRegularizedLogit(Logit):
 
 
 class Baseline(CLogit):
-    '''baseline single-task OCO'''
 
     def __init__(self, model, loss, radius=1.0, **kwargs):
 
         self.model = model
         self.loss = loss
         self.radius = radius
-        self.D = 2.0 * radius
-        self.t = 0
+        self.D = radius
+        self.params = next(self.model.parameters())
+        self.phi = self.params.data.clone()
+        self.last = True
+        self.batch = False
         super().__init__(radius=radius, **kwargs)
 
     def get_closure(self, X, Y, eta, phi):
 
         model = self.model
-        params = next(model.parameters())
+        params = self.params
         coef = 0.5 / eta
         def closure(grad=True):
             div = params - phi
@@ -72,198 +74,167 @@ class Baseline(CLogit):
             return loss
         return closure
 
-    def ftrl(self, X, Y, store=False):
+    def ftrl(self, X, Y):
 
-        params = next(self.model.parameters())
+        params = self.params
+        params.data = self.phi.clone()
         m = X.shape[0]
         eta = self.D / sqrt(m)
-        phi = params.data.clone()
         losses = np.empty(m)
-        blogit = BiasRegularizedLogit(radius=self.radius, eta=eta, phi=phi.detach().numpy())
+        blogit = BiasRegularizedLogit(radius=self.radius, eta=eta, phi=self.phi.detach().numpy())
         Xarray, Yarray = X.detach().numpy(), Y.detach().numpy()
+        if not self.last:
+            avg = torch.zeros(params.shape)
         for i in range(1, m+1):
-            if store:
-                if i == 1:
-                    avg = params.data.clone()
-                else:
-                    avg += params.data
+            if i < m and self.batch:
+                continue
+            if not self.last:
+                avg += params.data
             losses[i-1] = float(self.loss(self.model(X[i-1:i]), Y[i-1:i]))
             try:
                 blogit.fit(Xarray[:i], Yarray[:i], ncls=4)
                 params.data = torch.Tensor(blogit.coef_)
             except cp.error.SolverError:
-                closure = self.get_closure(X[:i], Y[:i], eta, phi)
+                closure = self.get_closure(X[:i], Y[:i], eta, self.phi)
                 frank_wolfe(closure, params, radius=self.radius)
-            if torch.norm(params.data) > self.radius and not np.isclose(torch.norm(params.data), self.radius):
-                pdb.set_trace()
-        if store:
-            params.data = avg / m
+        if not self.last:
+            self.params.data = avg / m
         return losses
 
-    def ogd(self, X, Y, store=False):
+    def ogd(self, X, Y):
 
-        params = next(self.model.parameters())
+        params = self.params
+        params.data = self.phi.clone()
         m = X.shape[0]
         eta = self.D / sqrt(m)
         losses = np.empty(m)
+        if not self.last:
+            avg = torch.zeros(params.shape)
         for i in range(1, m+1):
-            if store:
-                if i == 1:
-                    avg = params.data.clone()
-                else:
-                    avg += params.data
+            if not self.last:
+                avg += params.data
             loss = self.loss(self.model(X[i-1:i]), Y[i-1:i])
             self.model.zero_grad()
             loss.backward()
             params.data -= eta*params.grad
-            normp = torch.norm(params.data)
-            if normp > self.radius:
-                params.data *= self.radius / normp
+            magnitude = torch.norm(params.data)
+            if magnitude > self.radius:
+                params.data *= self.radius / magnitude
             losses[i-1] = float(loss)
-        if store:
-            params.data = avg / m
+        if not self.last:
+            self.params.data = avg / m
         return losses
 
-    def meta(self, X, Y, method='ftrl'):
+    def meta(self, X, Y, method='ogd'):
 
         Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        self.t += 1
-        params = next(self.model.parameters())
-        if self.t > 1:
-            params.data = self.phi.clone()
-        else:
-            self.phi = params.data.clone()
         losses = getattr(self, method)(Xtensor, Ytensor)
         self.fit(X, Y)
-        params.data = torch.Tensor(self.coef_)
+        self.params.data = torch.Tensor(self.coef_)
         return losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
 
 
 class Strawman(Baseline):
 
-    def __init__(self, model, loss, D=0.1, gamma=1.1, **kwargs):
+    def __init__(self, *args, D=0.1, gamma=1.1, **kwargs):
 
-        super().__init__(model, loss, **kwargs)
+        super().__init__(*args, **kwargs)
+        self.t = 0
         self.D = D
         self.gamma = gamma
 
-    def meta(self, X, Y, method='ftrl'):
+    def meta(self, X, Y, method='ogd'):
 
-        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
         self.t += 1
-        params = next(self.model.parameters())
+        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
+        losses = getattr(self, method)(Xtensor, Ytensor)
         self.fit(X, Y)
         opt = torch.Tensor(self.coef_)
-        if self.t > 1 and torch.norm(params-opt) > self.D:
+        self.params.data = opt
+        regret = losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
+        opt = torch.Tensor(self.coef_)
+        if self.t > 1 and torch.norm(opt-self.phi) > self.D:
             self.D *= self.gamma
-        losses = getattr(self, method)(Xtensor, Ytensor)
-        params.data = opt
-        return losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
+        self.phi = opt.clone()
+        return regret
 
 
 class FML(Strawman):
 
-    def __init__(self, model, loss, aogd=False, **kwargs):
+    def meta(self, X, Y, method='ogd'):
 
-        super().__init__(model, loss, **kwargs)
-        self.aogd = aogd
-        self.sqrtm1t = 0
-
-    def ftl_update(self, prev, m):
-
-        params = next(self.model.parameters())
-        sqrtm = sqrt(m)
-        if self.t > 1:
-            params.data *= sqrtm
-            params.data += self.sqrtm1t * prev
-            self.sqrtm1t += sqrtm
-            params.data /= self.sqrtm1t
-        else:
-            self.sqrtm1t += sqrtm
-
-    def aogd_update(self, prev, m):
-
-        params = next(self.model.parameters())
-        self.sqrtm1t += sqrt(m)
-        if self.t > 1:
-            params.data = prev - 1.0/self.sqrtm1t * (prev-params.data)
-
-    def meta(self, X, Y, method='ftrl'):
-
-        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
         self.t += 1
-        params = next(self.model.parameters())
-        prev = params.data.clone()
-        self.fit(X, Y)
-        opt = torch.Tensor(self.coef_)
-        if self.t > 1 and torch.norm(prev - opt) > self.D:
-            self.D *= self.gamma
+        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
         losses = getattr(self, method)(Xtensor, Ytensor)
-        params.data = opt
-        comp = float(self.loss(self.model(Xtensor), Ytensor))
-        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
-        self.t += 1
-        return losses.sum() - comp
-
-
-class FLI(FML):
-
-    def meta(self, X, Y, method='ftrl', avg=False):
-
-        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
-        params = next(self.model.parameters())
-        prev = params.data.clone()
         self.fit(X, Y)
-        losses = getattr(self, method)(Xtensor, Ytensor, store=avg)
-        update = params.data.clone()
-        if self.t and torch.norm(prev - update) > self.D:
-            self.D *= self.gamma
         opt = torch.Tensor(self.coef_)
-        params.data = opt
-        comp = float(self.loss(self.model(Xtensor), Ytensor))
-        params.data = update
-        self.aogd_update(prev, X.shape[0]) if self.aogd else self.ftl_update(prev, X.shape[0])
+        self.params.data = opt
+        regret = losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
+        opt = torch.Tensor(self.coef_)
+        if self.t > 1 and torch.norm(opt-self.phi) > self.D:
+            self.D *= self.gamma
+        self.phi = (1-1/self.t)*self.phi + 1/self.t*opt
+        return regret
+
+
+class FLI(Strawman):
+
+    def meta(self, X, Y, method='ogd'):
+
         self.t += 1
-        return losses.sum() - comp
+        Xtensor, Ytensor = torch.Tensor(X), torch.Tensor(Y)
+        losses = getattr(self, method)(Xtensor, Ytensor)
+        last = self.params.data.clone()
+        self.fit(X, Y)
+        opt = torch.Tensor(self.coef_)
+        self.params.data = opt
+        regret = losses.sum() - float(self.loss(self.model(Xtensor), Ytensor))
+        opt = torch.Tensor(self.coef_)
+        if self.t > 1 and torch.norm(opt-self.phi) > self.D:
+            self.D *= self.gamma
+        self.phi = (1-1/self.t)*self.phi + 1/self.t*last
+        return regret
 
 
 def main():
 
-    ncls, dim, shots, verbose = 4, 50, 1, True
+    ncls, dim, verbose = 4, 50, True
     w2v = word2vec(dim)
-    fnames = textfiles(m=shots)
     model = MultiClassLinear(dim, ncls)
     params = next(model.parameters())
     loss = OVAL(ncls, reduction='sum')
+    meta, task = sys.argv[1:3]
+    algos = {'baseline': Baseline, 'omniscient': Baseline, 'strawman': Strawman, 'fml': FML, 'fli': FLI}
+    iterate = '-'+sys.argv[3] if meta == 'fli' else ''
+    last = not iterate == '-avg'
 
-    f = h5py.File('FMRL/cbow_similarity.h5')
-    opt = np.array(f[str(shots)])
-    mean = opt.mean(0)
-    radius = max(norm(w-mean) for w in opt)
-    for name, algo in [
-                       ('baseline', Baseline(model, loss)),
-                       ('strawman', Strawman(model, loss)),
-                       ('omniscient', Baseline(model, loss)),
-                       ('FML', FML(model, loss)),
-                       ('FLI', FLI(model, loss))
-                       ]:
-        if name == 'omniscient':
-            params.data = torch.Tensor(mean.reshape(ncls, dim))
-            algo.D = radius
-        else:
-            params.data *= 0.0
+    f = h5py.File('FMRL/'+meta+iterate+'-'+task+'-online.h5', 'w')
+    for k in range(0, 6):
+        m = 2**k
+        print('\rComputing Regret of', m, 'Shot Classification')
+        fnames = textfiles(m=m)
+        params.data *= 0.0
+        algo = algos[sys.argv[1]](model, loss)
+        algo.last = last
+        if meta == 'omniscient':
+            g = h5py.File('FMRL/cbow_similarity.h5')
+            opt = np.array(g[str(m)])
+            g.close()
+            mean = opt.mean(0)
+            algo.phi = torch.Tensor(mean.reshape(ncls, dim))
+            algo.D = max(norm(theta-mean) for theta in opt)
         regret = []
-        print(name)
+        guesses = []
         for i, fname in enumerate(fnames):
+            guesses.append(algo.D)
             X, Y = text2cbow(fname, w2v)
-            regret.append(algo.meta(X, Y, method='ftrl'))
-            if verbose and not (i+1) % 10:
+            regret.append(algo.meta(X, Y, method=task))
+            if verbose:
                 print('\rProcessed', i+1, 'Tasks', end='')
-                print(' ; TAR:', round(np.mean(regret), 5), end='')
-        print('\rProcessed', i+1, 'Tasks ; TAR:', round(np.mean(regret), 5))
+                print('; TAR:', round(np.mean(regret), 5), end='')
+        print()
+        f.create_dataset(str(m), data=np.array([regret, guesses]))
     f.close()
-    pdb.set_trace()
-
 
 if __name__ == '__main__':
 
