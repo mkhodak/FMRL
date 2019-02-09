@@ -6,6 +6,8 @@ import numpy as np
 import torch
 from numpy.linalg import norm
 from sklearn.linear_model import LogisticRegression as Logit
+import sys
+sys.path.append('/home/ubuntu')
 from FMRL.data import word2vec
 from FMRL.data import textfiles
 from FMRL.data import text2cbow
