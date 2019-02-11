@@ -1,0 +1,3 @@
+python full_omniglot.py --shots 1 --inner-batch 10 --inner-iters 15 --meta-step 1 --meta-batch 5 --meta-iters 100000 --eval-batch 5 --eval-iters 50 --learning-rate 0.001 --meta-step-final 0 --train-shots 10 --checkpoint ckpt_o15full --transductive --eval-interval 25000 --eval-samples 10000 2>&1 | tee o15full.log
+
+python full_omniglot.py --shots 1 --classes 20 --inner-batch 20 --inner-iters 20 --meta-step 1 --meta-batch 5 --meta-iters 200000 --eval-batch 10 --eval-iters 50 --learning-rate 0.0005 --meta-step-final 0 --train-shots 10 --checkpoint ckpt_o120full --transductive --eval-interval 50000 --eval-samples 10000 2>&1 | tee o120full.log 
