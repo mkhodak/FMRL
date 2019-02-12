@@ -60,7 +60,7 @@ def train(sess,
                            inner_batch_size=inner_batch_size, inner_iters=inner_iters,
                            replacement=replacement,
                            meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size)
-        if i % eval_interval == 0:
+        if i > 0 and i % eval_interval == 0:
             #accuracies = []
             #for dataset, writer in [(train_set, train_writer), (test_set, test_writer)]:
             #    correct = reptile.evaluate(dataset, model.input_ph, model.label_ph, model.reg_ph,
