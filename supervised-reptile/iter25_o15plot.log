@@ -1,0 +1,32 @@
+2019-02-11 17:16:32.075836: I tensorflow/core/common_runtime/process_util.cc:69] Creating new thread pool with default inter op setting: 2. Tune using inter_op_parallelism_threads for best performance.
+Training...
+0 Test accuracy: 0.364
+1000 Test accuracy: 0.7152
+2000 Test accuracy: 0.764
+3000 Test accuracy: 0.7996
+4000 Test accuracy: 0.8292
+5000 Test accuracy: 0.8328
+6000 Test accuracy: 0.8444
+7000 Test accuracy: 0.868
+8000 Test accuracy: 0.8664
+9000 Test accuracy: 0.8888
+10000 Test accuracy: 0.892
+11000 Test accuracy: 0.9024
+12000 Test accuracy: 0.8924
+13000 Test accuracy: 0.9008
+14000 Test accuracy: 0.9132
+15000 Test accuracy: 0.9256
+16000 Test accuracy: 0.9052
+17000 Test accuracy: 0.936
+18000 Test accuracy: 0.9296
+19000 Test accuracy: 0.9388
+20000 Test accuracy: 0.9372
+21000 Test accuracy: 0.948
+22000 Test accuracy: 0.9396
+23000 Test accuracy: 0.9556
+24000 Test accuracy: 0.9568
+
+Evaluating...
+Train accuracy: 0.9768
+Valid accuracy: 0.9568
+Test accuracy: 0.9564
