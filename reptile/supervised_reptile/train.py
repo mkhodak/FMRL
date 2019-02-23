@@ -9,6 +9,7 @@ import tensorflow as tf
 
 from .reptile import Reptile
 from .variables import weight_decay
+from .eval import evaluate
 
 # pylint: disable=R0913,R0914
 def train(sess,
@@ -33,6 +34,7 @@ def train(sess,
           train_shots=None,
           transductive=False,
           reptile_fn=Reptile,
+          eval_kwargs={},
           log_fn=print):
     """
     Train a model on a dataset.
@@ -59,19 +61,21 @@ def train(sess,
                            replacement=replacement,
                            meta_step_size=cur_meta_step_size, meta_batch_size=meta_batch_size)
         if i % eval_interval == 0:
-            accuracies = []
-            for dataset, writer in [(train_set, train_writer), (test_set, test_writer)]:
-                correct = reptile.evaluate(dataset, model.input_ph, model.label_ph,
-                                           model.minimize_op, model.predictions,
-                                           num_classes=num_classes, num_shots=num_shots,
-                                           inner_batch_size=eval_inner_batch_size,
-                                           inner_iters=eval_inner_iters, replacement=replacement)
-                summary = sess.run(merged, feed_dict={accuracy_ph: correct/num_classes})
-                writer.add_summary(summary, i)
-                writer.flush()
-                accuracies.append(correct / num_classes)
-            log_fn('batch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]))
+#            accuracies = []
+#            for dataset, writer in [(train_set, train_writer), (test_set, test_writer)]:
+#                correct = reptile.evaluate(dataset, model.input_ph, model.label_ph,
+#                                           model.minimize_op, model.predictions,
+#                                           num_classes=num_classes, num_shots=num_shots,
+#                                           inner_batch_size=eval_inner_batch_size,
+#                                           inner_iters=eval_inner_iters, replacement=replacement)
+#                summary = sess.run(merged, feed_dict={accuracy_ph: correct/num_classes})
+#                writer.add_summary(summary, i)
+#                writer.flush()
+#                accuracies.append(correct / num_classes)
+#            log_fn('batch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]))
+            print('\r'+str(i), 'Test acc: ' + str(evaluate(sess, model, test_set, **eval_kwargs)))
         if i % 100 == 0 or i == meta_iters-1:
-            saver.save(sess, os.path.join(save_dir, 'model.ckpt'), global_step=i)
+#            saver.save(sess, os.path.join(save_dir, 'model.ckpt'), global_step=i)
+            print('\r'+str(i), end='')
         if time_deadline is not None and time.time() > time_deadline:
             break

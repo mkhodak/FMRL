@@ -25,15 +25,15 @@ def main():
     model = MiniImageNetModel(args.classes, **model_kwargs(args))
 
     with tf.Session() as sess:
+        eval_kwargs = evaluate_kwargs(args)
         if not args.pretrained:
             print('Training...')
-            train(sess, model, train_set, test_set, args.checkpoint, **train_kwargs(args))
+            train(sess, model, train_set, test_set, args.checkpoint, eval_kwargs=eval_kwargs, **train_kwargs(args))
         else:
             print('Restoring from checkpoint...')
             tf.train.Saver().restore(sess, tf.train.latest_checkpoint(args.checkpoint))
 
         print('Evaluating...')
-        eval_kwargs = evaluate_kwargs(args)
         print('Train accuracy: ' + str(evaluate(sess, model, train_set, **eval_kwargs)))
         print('Validation accuracy: ' + str(evaluate(sess, model, val_set, **eval_kwargs)))
         print('Test accuracy: ' + str(evaluate(sess, model, test_set, **eval_kwargs)))
