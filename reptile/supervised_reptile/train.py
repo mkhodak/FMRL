@@ -74,8 +74,7 @@ def train(sess,
 #                accuracies.append(correct / num_classes)
 #            log_fn('batch %d: train=%f test=%f' % (i, accuracies[0], accuracies[1]))
             print('\r'+str(i), 'Test acc: ' + str(evaluate(sess, model, test_set, **eval_kwargs)))
-        if i % 100 == 0 or i == meta_iters-1:
+#        if i % 100 == 0 or i == meta_iters-1:
 #            saver.save(sess, os.path.join(save_dir, 'model.ckpt'), global_step=i)
-            print('\r'+str(i), end='')
         if time_deadline is not None and time.time() > time_deadline:
             break
