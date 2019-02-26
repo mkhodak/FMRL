@@ -1,0 +1,27 @@
+2019-02-24 12:51:18.640161: I tensorflow/core/platform/cpu_feature_guard.cc:141] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2019-02-24 12:51:18.661450: I tensorflow/core/common_runtime/process_util.cc:69] Creating new thread pool with default inter op setting: 2. Tune using inter_op_parallelism_threads for best performance.
+Training...
+0 Test acc: 0.239
+1000 Test acc: 0.301
+2000 Test acc: 0.367
+3000 Test acc: 0.388
+4000 Test acc: 0.388
+5000 Test acc: 0.401
+6000 Test acc: 0.391
+7000 Test acc: 0.402
+8000 Test acc: 0.417
+9000 Test acc: 0.405
+10000 Test acc: 0.412
+11000 Test acc: 0.43
+12000 Test acc: 0.436
+13000 Test acc: 0.435
+14000 Test acc: 0.43
+15000 Test acc: 0.436
+16000 Test acc: 0.46
+17000 Test acc: 0.43
+18000 Test acc: 0.471
+19000 Test acc: 0.451
+Evaluating...
+Train accuracy: 0.497
+Validation accuracy: 0.398
+Test accuracy: 0.453
