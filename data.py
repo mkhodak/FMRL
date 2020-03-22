@@ -6,8 +6,8 @@ from sklearn.preprocessing import normalize
 from text_embedding.vectors import vocab2vecs
 
 
-HOME = '/home/mkhodak/'
-DATA = HOME + 'NLPrinceton/FMRL/data/miniwikinet/'
+HOME = '/home/mak/'
+DATA = HOME + 'FMRL/data/miniwikinet/'
 VECDIR = HOME + 'glove.6B/'
 
 

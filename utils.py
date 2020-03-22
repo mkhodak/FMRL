@@ -99,7 +99,7 @@ class ConstrainedLogit(Logit):
             difference between parameter norm and l2-constraint
         '''
 
-        super().__init__(C=10**logC, fit_intercept=False, **self.kwargs)
+        super().__init__(C=10**logC, fit_intercept=False, multi_class='ovr', **self.kwargs)
         super().fit(X, Y)
         return norm(self.coef_) - self.radius
 

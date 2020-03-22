@@ -6,6 +6,7 @@ This repository contains code and scripts to recreate the task-similarity, quadr
 * quadratic growth: <tt>growth.py</tt>
 * deep learning: <tt>.sh</tt> scripts in <tt>reptile</tt> directory (edited clone of OpenAI's [Reptile codebase](https://github.com/openai/supervised-reptile))
 * MiniWiki dataset: <tt>.tar.gz</tt> file in <tt>data/</tt>
+* MiniWiki experiments: <tt>online.py</tt> (Dependencies: scikit-learn, cvxpy, scipy, numpy, torch, h5py, [text_embedding](https://github.com/NLPrinceton/text_embedding))
 
 Citation:
   
